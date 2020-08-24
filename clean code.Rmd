@@ -1,0 +1,131 @@
+---
+title: "geomorph"
+output: html_document
+
+Notes:
+  
+#So there are two "weird" dataframe types that I've found. First is "geomorph.data.frame". I've gotten this kind of dataframe to work. The second is rrpp.data.frame. I cannot get this one to work. I've included a couple of files here. The first is my 3D landmark data. The other is the *original* data the makers of the code used to make this rrpp.data.frame. The actual dataframe in R is just pulled up by a dataset within their package. There are a couple of differences- their is 2D data and mine is 3D. But I don't think that *should* matter (in their documentation it doesn't say this won't work for 3D). Regardless, I cannot get my data to read in like theirs.I got it to the point of the data being called an rrpp.data.frame, but then it says it's an array and not a matrix.
+---
+
+```{r setup, include=FALSE}
+assign("last.warning", NULL, envir = baseenv())
+if (!require(devtools))install.packages("devtools", dependencies = TRUE)
+if (!require(StereoMorph))install.packages("StereoMorph", dependencies = TRUE)
+if (!require(geomorph))install.packages("geomorph", dependencies = TRUE)
+if (!require(readxl))install.packages("readxl")
+if (!require(RRPP))install.packages("RRPP")
+library(devtools)
+library(StereoMorph)
+library(geomorph)
+library(readxl)
+library(RRPP)
+```
+
+#Their data
+The description says this data includes the Procrustes residuals are the data.
+
+So somehow they got from the data I included (straight up landmarks) to this rrpp.data.frame with the residuals, Centroid size, and the Sex and Population listed as Factors.
+
+```{r}
+data(Pupfish)
+
+```
+
+#Generalized Procrustes Analysis
+This will take all landmarks and put them in the same shape space (rotation, translation)
+
+**Here is where they have the first weird kind of dataframe!! So this is the geomorph package and has its own dataframe. The results of this linear model give me the residuals I am supposed to use for the next type of dataframe. But I cannot figure out how to correctly save just a few parts of these results into what I need to make the dataframe in the next step.
+
+I need:
+Residuals (from the linear model)
+Centroid Size (CS) (from the Superimposition)
+
+included in the same rrpp.data.frame
+
+
+```{r cars}
+#Read in data
+
+#Superimopsition of the raw coordinate data (generalized procrustes analysis)
+fish.gpa <- gpagen(LMs, Proj = TRUE, ProcD = TRUE, surfaces = NULL, PrinAxes = TRUE, print.progress = TRUE)
+summary(fish.gpa)
+plotAllSpecimens(fish.gpa$coords, label = TRUE)
+
+#Make superimposed coordinates a geomorph dataframe
+gdf <- geomorph.data.frame(fish.gpa)
+
+
+fish.lm <- procD.lm(coords ~ log(Csize), iter = 9999, data = gdf)
+summary(fish.lm)
+plot(fish.lm)
+plot(fish.lm, outliers = TRUE)
+```
+ I'm trying to take the data I've analyzed here and put it into a new package, RRPP, but that has its own dataframe type as well. I tried to convert it below, but it keeps giving me errors.
+ 
+```{r}
+#RRPP
+residuals = fish.lm$residuals
+
+#exportres = write.table(as.data.frame(residuals),file="D:/Dropbox/Dissertation GMM work/8-7-20 work/R Markdown Files/residuals.csv", quote=F,sep=",",row.names=F)
+
+#I tried to export these so I could read the residuals in later but it didn't seem to be in the same format as the original data from the package
+
+residuals = as.factor(residuals)
+
+#Make superimposed coordinates a geomorph dataframe
+#?rrpp.data.frame
+
+adf <- geomorph.data.frame(fish.gpa)
+
+#aldf = as.matrix(adf)
+#data(aldf)
+adf$logSize <- log(adf$Csize)
+
+adf = as.matrix.data.frame(adf)
+adf = as.matrix(adf)
+
+adf <- rrpp.data.frame(adf)
+
+adf
+#My problem here is that when I click on the object "adf" the labels aren't on the factors
+fit <- lm.rrpp(coords ~ logSize, SS.type = "I", 
+               data = adf, print.progress = FALSE) 
+
+#Then I still get an error
+```
+
+```{r}
+#So then I tried:
+adf <- geomorph.data.frame(fish.gpa)
+
+#Add in the characters
+characters = read_xlsx("D:/Dropbox/Dissertation GMM work/8-7-20 work/All/characters8-7-20.xlsx")
+species = as.factor(characters$species)
+order = as.factor(characters$order)
+snout = as.factor(characters$snout)
+genus = as.factor(characters$genus)
+characters
+
+#Add species/character data to the geomorph dataframe
+adf$species<-species
+adf$order<-order
+adf$snout <- snout
+adf$genus <- genus
+adf
+
+
+#Need data in rrpp.data.frame format
+data(adf)
+adf$logSize <- log(adf$Csize)
+
+adf = as.matrix.data.frame(adf)
+
+adf <- rrpp.data.frame(adf)
+
+fit <- lm.rrpp(coords ~ logSize, SS.type = "I", 
+               data = adf, print.progress = FALSE) 
+summary(fit, formula = FALSE)
+
+
+```
+ 
